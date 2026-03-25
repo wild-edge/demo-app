@@ -9,16 +9,10 @@ with a hard cap of 3 reasoning steps to limit token usage.
 """
 
 import json
-import os
 import uuid
 
 from openai import OpenAI
 from wildedge import WildEdge
-
-openai_client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.environ.get("OPENROUTER_API_KEY", ""),
-)
 
 SYSTEM_PROMPT = (
     "You are an editorial assistant. Review article stats, flag anything concerning, "
@@ -99,7 +93,7 @@ def flag_article(article_id: str, reason: str, article_store: list[dict]) -> str
     return json.dumps({"error": f"Article {article_id!r} not found"})
 
 
-def run_editorial_review(article_store: list[dict], we: WildEdge) -> dict:
+def run_editorial_review(article_store: list[dict], we: WildEdge, openai_client: OpenAI) -> dict:
     """Run one editorial review pass over recent articles.
 
     Args:

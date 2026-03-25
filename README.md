@@ -1,6 +1,6 @@
 # WildEdge Demo App
 
-![Demo Screenshot](static/Demo%20Screenshot.png)
+![Demo Screenshot](assets/Demo%20Screenshot.png)
 
 A FastAPI app that processes news articles through a three-stage ML pipeline, with every inference tracked by the [WildEdge SDK](https://wildedge.dev). Learn more at [wildedge.dev](https://wildedge.dev).
 

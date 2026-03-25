@@ -20,16 +20,13 @@ import os
 import pathlib
 import uuid
 from contextlib import asynccontextmanager
-
-# Suppress the "PyTorch was not found" advisory from the transformers library.
-# We use AutoTokenizer only; no PyTorch model loading occurs.
-os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 from datetime import datetime, timezone
 
 import wildedge
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from openai import OpenAI
 from pydantic import BaseModel
 
 from app.agent.editorial_agent import run_editorial_review
@@ -49,6 +46,7 @@ embedder: SentenceEmbedder
 local_llm: LocalLLM
 remote_llm: RemoteLLM
 we: wildedge.WildEdge
+openai_client: OpenAI
 
 # In-memory article store, newest first, capped at 50 entries.
 article_store: list[dict] = []
@@ -65,7 +63,7 @@ CONFIDENCE_THRESHOLD = 0.85
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialise WildEdge and load all pipeline models before serving requests."""
-    global classifier, embedder, local_llm, remote_llm, we
+    global classifier, embedder, local_llm, remote_llm, we, openai_client
 
     # Initialise WildEdge first so integrations instrument runtimes at load time.
     we = wildedge.init(
@@ -73,12 +71,16 @@ async def lifespan(app: FastAPI):
         integrations=["onnx", "gguf", "openai"],
     )
 
+    openai_client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.environ.get("OPENROUTER_API_KEY", "not-set"),
+    )
+
     print("Loading pipeline models (first run downloads from HuggingFace Hub)...")
     classifier = SentimentClassifier()
     embedder = SentenceEmbedder()
     local_llm = LocalLLM()
-    # Works without OPENROUTER_API_KEY; returns a fallback message if the key is absent.
-    remote_llm = RemoteLLM()
+    remote_llm = RemoteLLM(openai_client)
     print("Pipeline ready.")
 
     yield
@@ -168,29 +170,10 @@ async def process_article(req: ArticleRequest) -> StreamingResponse:
                 + "\n"
             )
 
-            # Bridge the blocking sync token iterator into the async generator
-            # via a queue so the event loop stays unblocked between tokens.
-            queue: asyncio.Queue[str | None] = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-
-            def _run_stream() -> None:
-                try:
-                    for token in sync_stream(text):
-                        loop.call_soon_threadsafe(queue.put_nowait, token)
-                finally:
-                    loop.call_soon_threadsafe(queue.put_nowait, None)
-
-            stream_task = asyncio.create_task(asyncio.to_thread(_run_stream))
-
             summary_parts: list[str] = []
-            while True:
-                token = await queue.get()
-                if token is None:
-                    break
+            for token in sync_stream(text):
                 summary_parts.append(token)
                 yield json.dumps({"event": "token", "text": token}) + "\n"
-
-            await stream_task
 
         summary = "".join(summary_parts).strip()
         article_id = uuid.uuid4().hex[:8]
@@ -225,7 +208,7 @@ def list_articles() -> list[dict]:
 @app.post("/agent/run", response_model=AgentRunResponse)
 def run_agent() -> AgentRunResponse:
     """Trigger the editorial review agent over the current article store."""
-    result = run_editorial_review(article_store, we)
+    result = run_editorial_review(article_store, we, openai_client)
     return AgentRunResponse(**result)
 
 
