@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+
+# uv
+uv.lock
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Models (downloaded at runtime via HuggingFace Hub)
+*.gguf
+*.onnx
+
+# Editor
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WildEdge Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3a;
+      --accent:    #6c63ff;
+      --accent-dim:#3d3880;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --positive:  #22c55e;
+      --negative:  #ef4444;
+      --local:     #6c63ff;
+      --remote:    #f59e0b;
+      --radius:    8px;
+      --font:      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --mono:      "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo svg { width: 16px; height: 16px; fill: #fff; }
+
+    header h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
+
+    header p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .header-text { display: flex; flex-direction: column; }
+
+    .header-badges {
+      margin-left: auto;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      grid-template-rows: auto auto;
+      gap: 20px;
+    }
+
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; padding: 16px; }
+    }
+
+    .agent-section { grid-column: 1 / -1; }
+
+    /* ── Cards ───────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* ── Badges ──────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .badge-positive { background: rgba(34,197,94,.15); color: #4ade80; }
+    .badge-negative { background: rgba(239,68,68,.15);  color: #f87171; }
+    .badge-local    { background: rgba(108,99,255,.15); color: #a78bfa; }
+    .badge-remote   { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .badge-onnx     { background: rgba(56,189,248,.15); color: #38bdf8; }
+    .badge-gguf     { background: rgba(52,211,153,.15); color: #34d399; }
+    .badge-api      { background: rgba(245,158,11,.15); color: #fbbf24; }
+
+    /* ── Form elements ───────────────────────────────────── */
+    textarea, input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      padding: 10px 12px;
+      resize: vertical;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus, input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    textarea { min-height: 120px; }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn:hover:not(:disabled) { opacity: 0.88; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      padding: 5px 10px;
+    }
+    .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+
+    .samples {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      align-items: center;
+    }
+
+    /* ── Spinner ─────────────────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      flex-shrink: 0;
+    }
+
+    /* ── Result card ─────────────────────────────────────── */
+    #result-card {
+      display: none;
+      margin-top: 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    #result-card.visible { display: block; }
+    #result-card.error { border-color: #ef4444; }
+
+    .result-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .confidence-text { font-size: 12px; color: var(--muted); }
+
+    .result-summary {
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--text);
+    }
+
+    .result-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .routing-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .routing-local  { background: rgba(108,99,255,.2); color: #a78bfa; }
+    .routing-remote { background: rgba(245,158,11,.2); color: #fbbf24; }
+
+    /* ── Feed ────────────────────────────────────────────── */
+    .feed-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-empty p { margin-top: 6px; font-size: 12px; }
+
+    .article-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 8px;
+    }
+
+    .article-card:last-child { margin-bottom: 0; }
+
+    .article-header {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .article-preview {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    .article-summary {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .article-ts {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    .feed-scroll {
+      max-height: 520px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .feed-scroll::-webkit-scrollbar { width: 4px; }
+    .feed-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Agent section ───────────────────────────────────── */
+    .agent-inner {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .agent-controls { flex-shrink: 0; }
+
+    #agent-result {
+      flex: 1;
+      min-width: 240px;
+      display: none;
+    }
+
+    #agent-result.visible { display: block; }
+
+    .agent-summary {
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .flagged-list {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .flag-chip {
+      background: rgba(239,68,68,.12);
+      color: #f87171;
+      border: 1px solid rgba(239,68,68,.3);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-family: var(--mono);
+    }
+
+    /* ── Pipeline diagram ────────────────────────────────── */
+    .pipeline-diagram {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow-x: auto;
+      padding: 4px 0;
+    }
+
+    .pipe-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .pipe-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .pipe-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      max-width: 60px;
+      line-height: 1.3;
+    }
+
+    .pipe-arrow {
+      color: var(--muted);
+      font-size: 14px;
+      padding: 0 4px;
+      margin-bottom: 18px;
+      flex-shrink: 0;
+    }
+
+    .pipe-split {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: flex-start;
+    }
+
+    /* ── Divider ─────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 16px 0;
+    }
+
+    /* ── Error text ──────────────────────────────────────── */
+    .error-text { color: #f87171; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 16 16"><path d="M8 1L1 5v6l7 4 7-4V5L8 1zm0 1.8L13.2 6 8 9.2 2.8 6 8 2.8zM2 6.9l5.5 3.1v4.2L2 11.1V6.9zm7.5 7.3V10l5.5-3.1v4.2l-5.5 3.1z"/></svg>
+  </div>
+  <div class="header-text">
+    <h1>WildEdge Demo</h1>
+    <p>Multi-model article pipeline</p>
+  </div>
+  <div class="header-badges">
+    <span class="badge badge-onnx">ONNX</span>
+    <span class="badge badge-gguf">GGUF</span>
+    <span class="badge badge-api">API</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Submit panel ─────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>Process Article</div>
+
+    <!-- Pipeline diagram -->
+    <div class="pipeline-diagram" style="margin-bottom:16px;">
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:rgba(56,189,248,.12)">🔍</div>
+        <div class="pipe-label">DistilBERT<br>ONNX</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:rgba(52,211,153,.12)">📐</div>
+        <div class="pipe-label">MiniLM<br>ONNX</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:rgba(108,99,255,.12)">⚡</div>
+        <div class="pipe-label">Route by<br>confidence</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-split">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div class="pipe-icon" style="background:rgba(108,99,255,.12);width:28px;height:28px;font-size:13px;">🦙</div>
+          <div class="pipe-label" style="max-width:80px;">Llama 3.2<br>local · free</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div class="pipe-icon" style="background:rgba(245,158,11,.12);width:28px;height:28px;font-size:13px;">☁️</div>
+          <div class="pipe-label" style="max-width:80px;">GPT-4o-mini<br>remote</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted);">Sample articles</div>
+    <div class="samples">
+      <button class="btn btn-ghost" onclick="loadSample('tech')">🚀 Tech launch</button>
+      <button class="btn btn-ghost" onclick="loadSample('recall')">⚠️ Product recall</button>
+      <button class="btn btn-ghost" onclick="loadSample('earnings')">📊 Earnings report</button>
+    </div>
+
+    <textarea id="article-input" rows="6" placeholder="Paste an article or pick a sample above…"></textarea>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="process-btn" onclick="processArticle()">
+        Process article
+      </button>
+      <span id="processing-status" style="font-size:12px;color:var(--muted);display:none;">
+        <span class="spinner" style="display:inline-block;"></span>&nbsp; Running pipeline…
+      </span>
+    </div>
+
+    <!-- Result card -->
+    <div id="result-card">
+      <div id="result-error" class="error-text" style="display:none;"></div>
+      <div id="result-content">
+        <div class="result-meta">
+          <span id="res-sentiment" class="badge"></span>
+          <span id="res-confidence" class="confidence-text"></span>
+          <span id="res-routing" class="routing-pill"></span>
+        </div>
+        <div class="result-label">Summary</div>
+        <div id="res-summary" class="result-summary"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Recent articles feed ─────────────────────────── -->
+  <div class="card">
+    <div class="card-title"><span class="dot"></span>Recent Articles</div>
+    <div class="feed-scroll" id="feed">
+      <div class="feed-empty">
+        <div>No articles processed yet.</div>
+        <p>Submit an article on the left to get started.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Agent section ────────────────────────────────── -->
+  <div class="card agent-section">
+    <div class="card-title"><span class="dot"></span>Editorial Agent</div>
+    <div class="agent-inner">
+      <div class="agent-controls">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px;max-width:280px;">
+          Runs an agentic review loop over recent articles using GPT-4o-mini.
+          Checks stats, flags anything unusual, and produces a 2-sentence briefing.
+        </p>
+        <button class="btn btn-primary" id="agent-btn" onclick="runAgent()">
+          Run editorial review
+        </button>
+        <div id="agent-status" style="font-size:12px;color:var(--muted);margin-top:8px;display:none;">
+          <span class="spinner" style="display:inline-block;"></span>&nbsp; Agent running…
+        </div>
+      </div>
+
+      <div id="agent-result">
+        <div class="result-label">Editorial briefing</div>
+        <div id="agent-summary" class="agent-summary"></div>
+        <div id="flagged-section" style="display:none;">
+          <div class="result-label" style="margin-top:10px;">Flagged for review</div>
+          <div id="flagged-list" class="flagged-list"></div>
+        </div>
+        <div id="agent-meta" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  // ── Sample articles ────────────────────────────────────────────────────────
+
+  const SAMPLES = {
+    tech: `Apple today unveiled its next-generation M4 chip, delivering a 40% performance improvement over its predecessor. The new silicon features dedicated neural processing units optimized for on-device AI inference, allowing complex language models to run entirely locally. Developers are praising the efficiency gains, noting that battery life improved dramatically despite the performance increases. The chip is expected to ship in new MacBook Pro and iPad Pro models next quarter, with analysts predicting strong consumer demand driven by the growing interest in private, on-device AI capabilities.`,
+    recall: `Ford Motor Company announced an urgent recall of 180,000 vehicles following reports of unexpected brake failures at highway speeds. The defect, traced to a faulty sensor in the anti-lock braking system, has been linked to three accidents and one fatality. Owners of affected 2022-2024 F-150 and Explorer models are advised to stop driving their vehicles immediately and contact their nearest dealership. The National Highway Traffic Safety Administration has opened a formal investigation. Consumer advocacy groups are calling for a broader review of the supplier's components across other manufacturers.`,
+    earnings: `Acme Corp reported quarterly earnings that narrowly beat analyst expectations, with revenue up 3% year-over-year to $2.1 billion. However, guidance for the next quarter came in below consensus estimates, citing ongoing supply chain disruptions and softening demand in key European markets. The company announced a $500 million share buyback program while simultaneously warning of potential workforce reductions of up to 8%. Management struck a cautiously optimistic tone on the earnings call, pointing to emerging market growth as a potential offset. Shares fell 4% in after-hours trading.`,
+  };
+
+  function loadSample(key) {
+    document.getElementById('article-input').value = SAMPLES[key];
+  }
+
+  // ── Process article ────────────────────────────────────────────────────────
+
+  async function processArticle() {
+    const text = document.getElementById('article-input').value.trim();
+    if (!text) return;
+
+    const btn = document.getElementById('process-btn');
+    const status = document.getElementById('processing-status');
+    const resultCard = document.getElementById('result-card');
+    const resultError = document.getElementById('result-error');
+    const resultContent = document.getElementById('result-content');
+
+    btn.disabled = true;
+    status.style.display = 'inline-flex';
+    resultCard.className = 'card';
+    resultCard.style.display = 'none';
+    resultError.style.display = 'none';
+    resultContent.style.display = 'block';
+
+    try {
+      const res = await fetch('/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || 'Request failed');
+      }
+
+      const data = await res.json();
+      renderResult(data);
+      refreshFeed();
+    } catch (err) {
+      resultCard.classList.add('error');
+      resultError.textContent = `Error: ${err.message}`;
+      resultError.style.display = 'block';
+      resultContent.style.display = 'none';
+      resultCard.style.display = 'block';
+      resultCard.classList.add('visible');
+    } finally {
+      btn.disabled = false;
+      status.style.display = 'none';
+    }
+  }
+
+  function renderResult(data) {
+    const label = data.sentiment.label;
+    const conf  = (data.sentiment.confidence * 100).toFixed(1);
+
+    const sentBadge = document.getElementById('res-sentiment');
+    sentBadge.textContent = label;
+    sentBadge.className = `badge badge-${label === 'POSITIVE' ? 'positive' : 'negative'}`;
+
+    document.getElementById('res-confidence').textContent = `${conf}% confidence`;
+
+    const routing = document.getElementById('res-routing');
+    if (data.routed_to === 'local') {
+      routing.textContent = `Local · ${data.model_used}`;
+      routing.className = 'routing-pill routing-local';
+    } else {
+      routing.textContent = `Remote · ${data.model_used}`;
+      routing.className = 'routing-pill routing-remote';
+    }
+
+    document.getElementById('res-summary').textContent = data.summary;
+
+    const card = document.getElementById('result-card');
+    card.style.display = 'block';
+    card.classList.add('visible');
+  }
+
+  // ── Feed ───────────────────────────────────────────────────────────────────
+
+  async function refreshFeed() {
+    try {
+      const res = await fetch('/articles');
+      if (!res.ok) return;
+      const articles = await res.json();
+      renderFeed(articles);
+    } catch (_) { /* silently ignore poll failures */ }
+  }
+
+  function renderFeed(articles) {
+    const feed = document.getElementById('feed');
+    if (!articles.length) {
+      feed.innerHTML = `<div class="feed-empty"><div>No articles processed yet.</div><p>Submit an article on the left to get started.</p></div>`;
+      return;
+    }
+
+    feed.innerHTML = articles.map(a => {
+      const label = a.sentiment.label;
+      const conf  = (a.sentiment.confidence * 100).toFixed(0);
+      const sentClass = label === 'POSITIVE' ? 'badge-positive' : 'badge-negative';
+      const routeClass = a.routed_to === 'local' ? 'badge-local' : 'badge-remote';
+      const routeLabel = a.routed_to === 'local' ? `Local · ${a.model_used}` : `Remote · ${a.model_used}`;
+      const ts = new Date(a.processed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const summary = a.summary.length > 140 ? a.summary.slice(0, 140) + '…' : a.summary;
+      const flagged = a.flagged ? `<span class="badge" style="background:rgba(239,68,68,.12);color:#f87171;">flagged</span>` : '';
+
+      return `
+        <div class="article-card">
+          <div class="article-header">
+            <span class="badge ${sentClass}">${label}</span>
+            <span class="badge ${routeClass}">${routeLabel}</span>
+            ${flagged}
+            <span class="article-ts">${ts}</span>
+          </div>
+          <div class="article-preview">${escHtml(a.text_preview)}</div>
+          <div class="article-summary">${escHtml(summary)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Agent ──────────────────────────────────────────────────────────────────
+
+  async function runAgent() {
+    const btn    = document.getElementById('agent-btn');
+    const status = document.getElementById('agent-status');
+    const result = document.getElementById('agent-result');
+
+    btn.disabled = true;
+    status.style.display = 'flex';
+    result.classList.remove('visible');
+
+    try {
+      const res = await fetch('/agent/run', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || 'Agent request failed');
+      }
+      const data = await res.json();
+      renderAgentResult(data);
+      refreshFeed(); // agent may have flagged articles
+    } catch (err) {
+      document.getElementById('agent-summary').textContent = `Error: ${err.message}`;
+      document.getElementById('agent-summary').style.color = '#f87171';
+      result.classList.add('visible');
+    } finally {
+      btn.disabled = false;
+      status.style.display = 'none';
+    }
+  }
+
+  function renderAgentResult(data) {
+    document.getElementById('agent-summary').textContent = data.summary || '(no summary returned)';
+    document.getElementById('agent-summary').style.color = '';
+    document.getElementById('agent-meta').textContent = `${data.steps_taken} agent step${data.steps_taken !== 1 ? 's' : ''}`;
+
+    const flaggedSection = document.getElementById('flagged-section');
+    const flaggedList    = document.getElementById('flagged-list');
+
+    if (data.flagged_ids && data.flagged_ids.length) {
+      flaggedList.innerHTML = data.flagged_ids.map(id =>
+        `<span class="flag-chip">${escHtml(id)}</span>`
+      ).join('');
+      flaggedSection.style.display = 'block';
+    } else {
+      flaggedSection.style.display = 'none';
+    }
+
+    document.getElementById('agent-result').classList.add('visible');
+  }
+
+  // ── Poll feed every 3 s ────────────────────────────────────────────────────
+
+  setInterval(refreshFeed, 3000);
+  refreshFeed();
+</script>
+
+</body>
+</html>
