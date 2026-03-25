@@ -38,7 +38,8 @@ class SentimentClassifier:
             max_length=512,
             return_tensors="np",
         )
-        feed = {k: v for k, v in inputs.items()}
+        # feed = {k: v for k, v in inputs.items()}
+        feed = dict(inputs)
         logits = self.session.run(None, feed)[0][0]
         exp = np.exp(logits - np.max(logits))
         probs = exp / exp.sum()

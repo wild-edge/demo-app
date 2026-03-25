@@ -560,17 +560,18 @@
     document.getElementById('article-input').value = SAMPLES[key];
   }
 
-  // ── Process article ────────────────────────────────────────────────────────
+  // ── Process article (streaming) ────────────────────────────────────────────
 
   async function processArticle() {
     const text = document.getElementById('article-input').value.trim();
     if (!text) return;
 
-    const btn = document.getElementById('process-btn');
-    const status = document.getElementById('processing-status');
-    const resultCard = document.getElementById('result-card');
+    const btn         = document.getElementById('process-btn');
+    const status      = document.getElementById('processing-status');
+    const resultCard  = document.getElementById('result-card');
     const resultError = document.getElementById('result-error');
     const resultContent = document.getElementById('result-content');
+    const summaryEl   = document.getElementById('res-summary');
 
     btn.disabled = true;
     status.style.display = 'inline-flex';
@@ -578,6 +579,7 @@
     resultCard.style.display = 'none';
     resultError.style.display = 'none';
     resultContent.style.display = 'block';
+    summaryEl.textContent = '';
 
     try {
       const res = await fetch('/articles', {
@@ -591,9 +593,54 @@
         throw new Error(err.detail || 'Request failed');
       }
 
-      const data = await res.json();
-      renderResult(data);
-      refreshFeed();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // last partial line stays in buffer
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line);
+
+          if (event.event === 'classification') {
+            const conf = (event.confidence * 100).toFixed(1);
+            const sentBadge = document.getElementById('res-sentiment');
+            sentBadge.textContent = event.label;
+            sentBadge.className = `badge badge-${event.label === 'POSITIVE' ? 'positive' : 'negative'}`;
+            document.getElementById('res-confidence').textContent = `${conf}% confidence`;
+            // Show the card as soon as we have the first result
+            resultCard.style.display = 'block';
+            resultCard.classList.add('visible');
+          }
+
+          if (event.event === 'routing') {
+            const routing = document.getElementById('res-routing');
+            if (event.routed_to === 'local') {
+              routing.textContent = `Local · ${event.model_used}`;
+              routing.className = 'routing-pill routing-local';
+            } else {
+              routing.textContent = `Remote · ${event.model_used}`;
+              routing.className = 'routing-pill routing-remote';
+            }
+            status.style.display = 'none'; // hide spinner once routing is known
+          }
+
+          if (event.event === 'token') {
+            summaryEl.textContent += event.text;
+          }
+
+          if (event.event === 'done') {
+            refreshFeed();
+          }
+        }
+      }
     } catch (err) {
       resultCard.classList.add('error');
       resultError.textContent = `Error: ${err.message}`;
@@ -605,32 +652,6 @@
       btn.disabled = false;
       status.style.display = 'none';
     }
-  }
-
-  function renderResult(data) {
-    const label = data.sentiment.label;
-    const conf  = (data.sentiment.confidence * 100).toFixed(1);
-
-    const sentBadge = document.getElementById('res-sentiment');
-    sentBadge.textContent = label;
-    sentBadge.className = `badge badge-${label === 'POSITIVE' ? 'positive' : 'negative'}`;
-
-    document.getElementById('res-confidence').textContent = `${conf}% confidence`;
-
-    const routing = document.getElementById('res-routing');
-    if (data.routed_to === 'local') {
-      routing.textContent = `Local · ${data.model_used}`;
-      routing.className = 'routing-pill routing-local';
-    } else {
-      routing.textContent = `Remote · ${data.model_used}`;
-      routing.className = 'routing-pill routing-remote';
-    }
-
-    document.getElementById('res-summary').textContent = data.summary;
-
-    const card = document.getElementById('result-card');
-    card.style.display = 'block';
-    card.classList.add('visible');
   }
 
   // ── Feed ───────────────────────────────────────────────────────────────────

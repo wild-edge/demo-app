@@ -10,6 +10,7 @@ WildEdge auto-instruments the OpenAI client via the `openai` integration.
 """
 
 import os
+from collections.abc import Iterator
 
 from openai import OpenAI
 
@@ -27,30 +28,25 @@ class RemoteLLM:
     def __init__(self) -> None:
         api_key = os.environ.get("OPENROUTER_API_KEY", "")
         if not api_key:
-            raise ValueError(
-                "OPENROUTER_API_KEY environment variable is not set. "
-                "Export it before starting the app."
+            print(
+                "Warning: OPENROUTER_API_KEY is not set. Remote summarisation will return a fallback message."
             )
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
+            api_key=api_key or "not-set",
         )
 
     def summarise(self, text: str, context: str = "") -> str:
-        """Summarise an article in 2 sentences using GPT-4o-mini via OpenRouter.
+        """Summarise an article in 2 sentences using GPT-4o-mini via OpenRouter."""
+        return "".join(self.stream(text))
 
-        Args:
-            text: The article text to summarise.
-            context: Optional retrieved context (not forwarded to save tokens).
-
-        Returns:
-            A 2-sentence summary string, or an unavailability message if the
-            API key is missing at call time.
-        """
+    def stream(self, text: str) -> Iterator[str]:
+        """Yield summary tokens as they are generated."""
         if not os.environ.get("OPENROUTER_API_KEY", ""):
-            return "[Remote summarisation unavailable: OPENROUTER_API_KEY not set]"
+            yield "[Remote summarisation unavailable: OPENROUTER_API_KEY not set]"
+            return
 
-        completion = self.client.chat.completions.create(
+        response = self.client.chat.completions.create(
             model="openai/gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -58,5 +54,7 @@ class RemoteLLM:
             ],
             max_tokens=150,
             temperature=0.3,
+            stream=True,
         )
-        return completion.choices[0].message.content or ""
+        for chunk in response:
+            yield chunk.choices[0].delta.content or ""

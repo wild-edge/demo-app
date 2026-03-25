@@ -9,6 +9,8 @@ they are clear-cut content that does not need a more capable model.
 WildEdge auto-instruments llama-cpp-python via the `gguf` integration.
 """
 
+from collections.abc import Iterator
+
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 
@@ -24,15 +26,11 @@ class LocalLLM:
         self.llm = Llama(model_path, n_ctx=2048, n_gpu_layers=-1, verbose=False)
 
     def summarise(self, text: str, context: str = "") -> str:
-        """Summarise an article in 2 sentences using the local model.
+        """Summarise an article in 2 sentences using the local model."""
+        return "".join(self.stream(text))
 
-        Args:
-            text: The article text to summarise.
-            context: Optional retrieved context to inform the summary.
-
-        Returns:
-            A 2-sentence summary string.
-        """
+    def stream(self, text: str) -> Iterator[str]:
+        """Yield summary tokens as they are generated."""
         prompt = f"[INST] Summarise in 2 sentences.\nArticle: {text[:400]}[/INST]"
-        result = self.llm(prompt, max_tokens=120, temperature=0.3)
-        return result["choices"][0]["text"].strip()
+        for chunk in self.llm(prompt, max_tokens=120, temperature=0.3, stream=True):
+            yield chunk["choices"][0]["text"]

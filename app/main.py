@@ -14,9 +14,10 @@ or directly:
     uv run wildedge run --integrations onnx,gguf,openai -- uvicorn app.main:app --reload --port 8002
 """
 
+import asyncio
+import json
 import os
 import pathlib
-import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -27,6 +28,7 @@ from datetime import datetime, timezone
 
 import wildedge
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -75,6 +77,7 @@ async def lifespan(app: FastAPI):
     classifier = SentimentClassifier()
     embedder = SentenceEmbedder()
     local_llm = LocalLLM()
+    # Works without OPENROUTER_API_KEY; returns a fallback message if the key is absent.
     remote_llm = RemoteLLM()
     print("Pipeline ready.")
 
@@ -122,60 +125,95 @@ def health() -> dict:
 
 
 @app.post("/articles")
-def process_article(req: ArticleRequest) -> dict:
-    """Run an article through the full pipeline and return the result.
+async def process_article(req: ArticleRequest) -> StreamingResponse:
+    """Run an article through the full pipeline, streaming the result as NDJSON.
 
-    Pipeline stages:
-      1. DistilBERT (ONNX): sentiment classification and confidence score
-      2. MiniLM (ONNX): sentence embedding for context retrieval
-      3. Routing: confidence >= 0.85 goes to Llama 3.2 local, else GPT-4o-mini remote
+    Each line is a JSON object with an "event" field:
+      {"event": "classification", "label": "POSITIVE", "confidence": 0.94}
+      {"event": "routing", "routed_to": "local", "model_used": "llama-3.2-1b-q4"}
+      {"event": "token", "text": "Apple's new chip..."}
+      {"event": "done", "id": "abc123", "processed_at": "..."}
+
+    Uses an async generator so that ContextVar-based tracing (we.trace / we.span)
+    works correctly — context is stable across yields in an async generator,
+    unlike a sync generator iterated via a threadpool.
     """
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=422, detail="Article text must not be empty.")
 
-    with we.trace(agent_id="article-pipeline", run_id=str(uuid.uuid4())):
-        # Stage 1: classify sentiment
-        sentiment = classifier.predict(text)
+    async def generate():
+        with we.trace(agent_id="article-pipeline", run_id=str(uuid.uuid4())):
+            # Stage 1: classify sentiment (blocking — run in threadpool)
+            sentiment = await asyncio.to_thread(classifier.predict, text)
+            yield json.dumps({"event": "classification", **sentiment}) + "\n"
 
-        # Stage 2: embed + fake retrieval (~80 ms to simulate a vector store round-trip)
-        embedder.embed(text)
-        with we.span(
-            kind="retrieval",
-            name="vector_search",
-            input_summary=text[:100],
-        ) as span:
-            time.sleep(0.08)
-            context = f"[background context relevant to: {text[:60]}]"
-            span.output_summary = context
+            # Stage 2: embed + fake retrieval (blocking — run in threadpool)
+            await asyncio.to_thread(embedder.embed, text)
+            with we.span(kind="retrieval", name="vector_search", input_summary=text[:100]) as span:
+                await asyncio.sleep(0.08)
+                context = f"[background context relevant to: {text[:60]}]"
+                span.output_summary = context
 
-        # Stage 3: route to local or remote summariser
-        if sentiment["confidence"] >= CONFIDENCE_THRESHOLD:
-            summary = local_llm.summarise(text, context)
-            routed_to = "local"
-            model_used = "llama-3.2-1b-q4"
-        else:
-            summary = remote_llm.summarise(text, context)
-            routed_to = "remote"
-            model_used = "gpt-4o-mini"
+            # Stage 3: route and stream tokens
+            if sentiment["confidence"] >= CONFIDENCE_THRESHOLD:
+                routed_to, model_used = "local", "llama-3.2-1b-q4"
+                sync_stream = local_llm.stream
+            else:
+                routed_to, model_used = "remote", "gpt-4o-mini"
+                sync_stream = remote_llm.stream
 
-    article_id = uuid.uuid4().hex[:8]
-    entry = {
-        "id": article_id,
-        "text_preview": text[:120] + ("..." if len(text) > 120 else ""),
-        "sentiment": sentiment,
-        "routed_to": routed_to,
-        "model_used": model_used,
-        "summary": summary,
-        "processed_at": datetime.now(timezone.utc).isoformat(),
-        "flagged": False,
-    }
+            yield (
+                json.dumps({"event": "routing", "routed_to": routed_to, "model_used": model_used})
+                + "\n"
+            )
 
-    article_store.insert(0, entry)
-    if len(article_store) > 50:
-        article_store.pop()
+            # Bridge the blocking sync token iterator into the async generator
+            # via a queue so the event loop stays unblocked between tokens.
+            queue: asyncio.Queue[str | None] = asyncio.Queue()
+            loop = asyncio.get_running_loop()
 
-    return entry
+            def _run_stream() -> None:
+                try:
+                    for token in sync_stream(text):
+                        loop.call_soon_threadsafe(queue.put_nowait, token)
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, None)
+
+            stream_task = asyncio.create_task(asyncio.to_thread(_run_stream))
+
+            summary_parts: list[str] = []
+            while True:
+                token = await queue.get()
+                if token is None:
+                    break
+                summary_parts.append(token)
+                yield json.dumps({"event": "token", "text": token}) + "\n"
+
+            await stream_task
+
+        summary = "".join(summary_parts).strip()
+        article_id = uuid.uuid4().hex[:8]
+        entry = {
+            "id": article_id,
+            "text_preview": text[:120] + ("..." if len(text) > 120 else ""),
+            "sentiment": sentiment,
+            "routed_to": routed_to,
+            "model_used": model_used,
+            "summary": summary,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "flagged": False,
+        }
+        article_store.insert(0, entry)
+        if len(article_store) > 50:
+            article_store.pop()
+
+        yield (
+            json.dumps({"event": "done", "id": article_id, "processed_at": entry["processed_at"]})
+            + "\n"
+        )
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 
 @app.get("/articles")

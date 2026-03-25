@@ -7,8 +7,7 @@ if [[ -z "${WILDEDGE_DSN:-}" ]]; then
 fi
 
 if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-  echo 'Set OPENROUTER_API_KEY first, e.g. export OPENROUTER_API_KEY="sk-or-..."' >&2
-  exit 1
+  echo 'Warning: OPENROUTER_API_KEY is not set. Ambiguous articles will return a fallback message instead of a remote summary.' >&2
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

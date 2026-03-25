@@ -35,7 +35,7 @@ class SentenceEmbedder:
             max_length=512,
             return_tensors="np",
         )
-        feed = {k: v for k, v in inputs.items()}
+        feed = dict(inputs)
         token_embeddings = self.session.run(None, feed)[0]
         attention_mask = inputs["attention_mask"]
         mask_expanded = attention_mask[:, :, np.newaxis].astype(np.float32)
