@@ -31,6 +31,23 @@ class LocalLLM:
 
     def stream(self, text: str) -> Iterator[str]:
         """Yield summary tokens as they are generated."""
-        prompt = f"[INST] Summarise in 2 sentences.\nArticle: {text[:400]}[/INST]"
-        for chunk in self.llm(prompt, max_tokens=120, temperature=0.3, stream=True):
+        # Llama 3.x instruct format with explicit stop token so the KV cache
+        # ends at a clean boundary for subsequent calls.
+        prompt = (
+            "<|begin_of_text|>"
+            "<|start_header_id|>system<|end_header_id|>\n\n"
+            "You are a concise news summariser. Reply with exactly 2 sentences."
+            "<|eot_id|>"
+            "<|start_header_id|>user<|end_header_id|>\n\n"
+            f"Summarise this article in 2 sentences.\n\nArticle: {text[:400]}"
+            "<|eot_id|>"
+            "<|start_header_id|>assistant<|end_header_id|>\n\n"
+        )
+        for chunk in self.llm(
+            prompt,
+            max_tokens=120,
+            temperature=0.3,
+            stop=["<|eot_id|>"],
+            stream=True,
+        ):
             yield chunk["choices"][0]["text"]
