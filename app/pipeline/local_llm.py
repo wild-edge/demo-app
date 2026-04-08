@@ -34,7 +34,6 @@ class LocalLLM:
         # Llama 3.x instruct format with explicit stop token so the KV cache
         # ends at a clean boundary for subsequent calls.
         prompt = (
-            "<|begin_of_text|>"
             "<|start_header_id|>system<|end_header_id|>\n\n"
             "You are a concise news summariser. Reply with exactly 2 sentences."
             "<|eot_id|>"
