@@ -15,11 +15,17 @@ dependencies = [
     "numpy",
 ]
 
-[tool.uv.sources]
-wildedge-sdk = { path = "../wildedge-python", editable = true }
+# Optional: If you want to use the editable install feature of uv, you can uncomment 
+# the following lines and adjust the path to your local wildedge-python repository.
+# [tool.uv.sources]
+# wildedge-sdk = { path = "../wildedge-python", editable = true }
 
 [dependency-groups]
-dev = ["ruff"]
+dev = ["ruff", "pytest"]
+
+[tool.pytest.ini_options]
+markers = ["slow: requires large model download, skipped by default"]
+addopts = "-m 'not slow'"
 
 [tool.ruff]
 target-version = "py310"
